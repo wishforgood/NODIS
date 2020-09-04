@@ -10,6 +10,7 @@ from tqdm import tqdm
 from config import BOX_SCALE, IM_SCALE
 import dill as pkl
 import os
+import json
 
 conf = ModelConfig()
 from lib.NODIS import NODIS
@@ -63,11 +64,11 @@ def val_batch(batch_num, b, evaluator, thrs=(20, 50, 100)):
         }
         all_pred_entries.append(pred_entry)
 
-        evaluator[conf.mode].evaluate_scene_graph_entry(
+        pred_to_gt, pred_5ples, rel_scores, rt_cls, rt_reg = evaluator[conf.mode].evaluate_scene_graph_entry(
             gt_entry,
             pred_entry,
         )
-
+    return rt_cls, rt_reg
 
 evaluator = BasicSceneGraphEvaluator.all_modes(multiple_preds=False)#conf.multi_pred
 if conf.cache is not None and os.path.exists(conf.cache):
@@ -87,11 +88,15 @@ if conf.cache is not None and os.path.exists(conf.cache):
     evaluator[conf.mode].print_stats()
 else:
     detector.eval()
+    rt_clses = []
+    rt_regs = []
     for val_b, batch in enumerate(tqdm(val_loader)):
-        val_batch(conf.num_gpus*val_b, batch, evaluator)
+        rt_cls, rt_reg = val_batch(conf.num_gpus*val_b, batch, evaluator)
+        rt_clses.append(rt_cls)
+        rt_regs.append(rt_reg)
 
     evaluator[conf.mode].print_stats()
 
     if conf.cache is not None:
-        with open(conf.cache,'wb') as f:
-            pkl.dump(all_pred_entries, f)
+        with open(conf.cache,'w') as f:
+            json.dump([rt_clses, rt_regs], f)
